@@ -1,0 +1,75 @@
+name: Auto Extract ZIP
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Unzip
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip
+
+      - name: Extract ZIP Files
+        shell: bash
+        run: |
+          set -e
+
+          shopt -s nullglob
+          ZIP_FILES=(./*.zip)
+
+          if [ ${#ZIP_FILES[@]} -eq 0 ]; then
+            echo "Tidak ada file ZIP di root repository."
+            exit 0
+          fi
+
+          for ZIP_FILE in "${ZIP_FILES[@]}"; do
+            echo "======================================"
+            echo "Mengekstrak: $ZIP_FILE"
+            echo "======================================"
+
+            unzip -o "$ZIP_FILE" -d . \
+              -x ".git/*" \
+              -x ".github/*"
+
+            echo "Menghapus: $ZIP_FILE"
+            rm -f "$ZIP_FILE"
+          done
+
+      - name: Commit Changes
+        shell: bash
+        run: |
+          set -e
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "Tidak ada perubahan yang perlu di-commit."
+            exit 0
+          fi
+
+          git commit -m "chore: auto-extract ZIP [skip ci]"
+
+      - name: Push Changes
+        shell: bash
+        run: |
+          set -e
+
+          git pull --rebase origin main
+          git push origin HEAD:main
